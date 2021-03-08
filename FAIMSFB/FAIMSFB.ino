@@ -150,6 +150,7 @@ FAIMSFBdata Rev_1_faimsfb = {
                             SIGNATURE
                             };
 
+void msTimerIntercept(void);
 extern void (*mySysTickHook)(void);
 void (*mySysTickHook)(void) = msTimerIntercept;
 void msTimerIntercept(void)
