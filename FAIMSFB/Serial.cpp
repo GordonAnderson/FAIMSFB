@@ -33,8 +33,8 @@ int ErrorCode = 0;   // Last communication error that was logged
 Ring_Buffer  RB;     // Receive ring buffer
 
 // ACK only string, two options. Need a comma when in the echo mode
-char *ACKonlyString1 = "\x06";
-char *ACKonlyString2 = ",\x06";
+char *ACKonlyString1 = (char *)"\x06";
+char *ACKonlyString2 = (char *)",\x06";
 char *SelectedACKonlyString = ACKonlyString1;
 
 bool echoMode = false;
@@ -115,6 +115,8 @@ Commands  CmdArray[] =   {
   {"CALDCB2", CMDfunction, 0, (char *)CalibrateDCB2}, 
   {"CALVRF", CMDfunction, 0, (char *)CalibrateVrf}, 
   {"CALDRV2VRF", CMDfunction, 0, (char *)CalibrateVrf2Drive}, 
+  {"SGAIN", CMDfloat, 1, (char *)&loopGain}, 
+  {"GGAIN", CMDfloat, 0, (char *)&loopGain}, 
   // End of table marker
   {0},
 };
@@ -183,7 +185,7 @@ void LoadAltRev(void)
    uint32_t addr = (uint32_t)&LoadAltRev;
    if(addr > 0x20000) return;
    // Try and vector to the new location
-   ProgramGOTO("0x20000");
+   ProgramGOTO((char *)"0x20000");
 }
 
 // This function will jump to the defined location if the location appears to be programmed.

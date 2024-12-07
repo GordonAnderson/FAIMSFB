@@ -26,7 +26,7 @@
 
 typedef struct
 {
-  int8_t  Chan;                   // ADC channel number 0 through max channels for chip.
+  uint8_t  Chan;                   // ADC channel number 0 through max channels for chip.
                                   // If MSB is set then this is a M0 ADC channel number
   float   m;                      // Calibration parameters to convert channel to engineering units
   float   b;                      // ADCcounts = m * value + b, value = (ADCcounts - b) / m

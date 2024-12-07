@@ -44,6 +44,14 @@
 //    1.) Added additional tests to make sure drive level is within range
 //  V1.2, March 11, 2020
 //    1.) Added support foor uploading new firmware to the upper half of the FLASH
+//  V1.3, June 3,2021
+//    1.) Added support for the Dual electrometer with the on board M4 processor
+//  V1.4, October 20,2022
+//    1.) Improved the ADC filtering for level monitoring
+//    2.) Added command to set closed loop gain and lowered the default gain
+//  V1.5, August 10,2024
+//    1.) Improved the set VRF function to use global gain
+//    2.) Improved the closed loop performance
 //
 // Gordon Anderson
 //
@@ -66,7 +74,7 @@
 #include <SerialBuffer.h>
 
 int8_t       TWIadd = 0x50;
-const char   Version[] PROGMEM = "FAIMSFB version 1.2, March 11, 2020";
+const char   Version[] PROGMEM = "FAIMSFB version 1.5, Aug 10, 2024";
 FAIMSFBdata  faimsfb;
 FAIMSFBstate sdata;
 int          Eaddress = 0;
@@ -78,6 +86,7 @@ bool         ReturnAvalible = false;
 bool         InitMonValue = false;
 bool         SetVrfFlag = false;
 bool         SetVrfUseTable = false;
+float        loopGain = 1.0;
 
 SerialBuffer sb;
 
@@ -147,7 +156,10 @@ FAIMSFBdata Rev_1_faimsfb = {
                             5,13107,0,                // DAC5, offset, neg
                             0,0,0,0,
                             //
-                            SIGNATURE
+                            SIGNATURE,
+                            false, 0x20,
+                            0,198.59,0,               // ADC0, 0 to 500 pA electrometer pos channel
+                            1,198.59,0,               // ADC1, 0 to 500 pA electrometer neg channel
                             };
 
 void msTimerIntercept(void);
@@ -567,7 +579,7 @@ void setup()
   Wire.onAddressMatch(AddressMatchEvent);
   initPWM();
   // Configure Threads
-  SystemThread.setName("Update");
+  SystemThread.setName((char *)"Update");
   SystemThread.onRun(Update);
   SystemThread.setInterval(25);
   // Add threads to the controller
@@ -586,7 +598,12 @@ bool UpdateADCvalue(uint8_t SPIcs, ADCchan *achan, float *value, float filter)
   {
     // Here if this is a M0 ADC pin
     val = 0;
-    for(int i=0;i<16;i++) val += analogRead(achan->Chan & 0x7F);
+    for(int i=0;i<64;i++) 
+    {
+      val += analogRead(achan->Chan & 0x7F);
+      delayMicroseconds(1);
+    }
+    val /= 4;
     //val = analogRead(achan->Chan & 0x7F) << 4;
     fval = Counts2Value(val,achan);
     if(*value == -1) *value = fval;
@@ -648,20 +665,20 @@ void SetVrf(float Vrf)
 
    if(!faimsfb.Enable) return;   // Exit if system is not enabled
    sdata.Vrf = faimsfb.Vrf = Vrf;
-   for(int i=0;i<20;i++)
+   for(int i=0;i<100;i++)
    {
       // Read the current Vrf level
       rb.Vrf = -1;
-      for(int j=0;j<100;j++) UpdateADCvalue(0, &faimsfb.VRFMon, &rb.Vrf);
+      for(int j=0;j<10;j++) UpdateADCvalue(0, &faimsfb.VRFMon, &rb.Vrf);
       // Calculate error and adjust the drive level
       error = Vrf - rb.Vrf;
-      if(fabs(error) <= 5) return;
-      if(fabs(error) <= Vrf * 0.01) return;
-      faimsfb.Drive += error * 0.05;
+      if(fabs(error) <= 1) return;
+      if(fabs(error) <= Vrf * 0.001) return;
+      faimsfb.Drive += error * loopGain/100;
       if(faimsfb.Drive > faimsfb.MaxDrive) faimsfb.Drive = faimsfb.MaxDrive;
       if(faimsfb.Drive < 0) faimsfb.Drive = 0;  
       UpdateDrive(faimsfb.Drive);
-      delay(200);
+      delay(1);
    }
 }
 
@@ -671,10 +688,13 @@ void VRFcontrolLoop(void)
   if(!faimsfb.Enable) return;
   // If Mode is false exit
   if(!faimsfb.Mode) return;
+  // Update the VRF readback, this gets rid of delay and the loop is faster
+  rb.Vrf = -1;
+  for(int j=0;j<10;j++) UpdateADCvalue(0, &faimsfb.VRFMon, &rb.Vrf);
   // Calculate error between actual and setpoint
   float error = faimsfb.Vrf - rb.Vrf;
   if(fabs(error) < 2.0) return;
-  faimsfb.Drive += error * 0.005;
+  faimsfb.Drive += error * loopGain/100;
   if(faimsfb.Drive > faimsfb.MaxDrive) faimsfb.Drive = faimsfb.MaxDrive;
   if(faimsfb.Drive < 0) faimsfb.Drive = 0;  
 }

@@ -31,7 +31,7 @@ extern char *SelectedACKonlyString;
 // The serial receiver uses Xon and Xoff to control input data from the source
 #define XON   0x11
 #define XOFF  0x13
-#define EOF   0x1A
+//#define EOF   0x1A
 #define ACK   0x06
 #define NAK   0x15
 
